@@ -299,8 +299,8 @@ class CrossPointSettings : public PersistableStore<CrossPointSettings> {
   uint8_t characterSpacing = CHARACTER_SPACING_OFFSET;
   int8_t getCharacterSpacing() const { return static_cast<int8_t>(characterSpacing - CHARACTER_SPACING_OFFSET); }
   uint8_t textAntiAliasing = 1;
-  // Short power button click behaviour
-  uint8_t shortPwrBtn = IGNORE;
+  // Short power button click behaviour (defaults to PAGE_TURN for ergonomics)
+  uint8_t shortPwrBtn = PAGE_TURN;
   // Power double click (see hasPowerDoubleClick()); Ignore disables the
   // single-click delay.
   uint8_t doublePwrBtn = defaultDoublePwrBtn();
@@ -314,6 +314,7 @@ class CrossPointSettings : public PersistableStore<CrossPointSettings> {
   uint8_t frontButtonLayout = BACK_CONFIRM_LEFT_RIGHT;
   uint8_t sideButtonLayout = PREV_NEXT;
   uint8_t frontButtonFollowOrientation = 0;
+  uint8_t swapFrontPageTurnButtons = 1;  // Swap Left/Right page turn (Left = Next, Right = Prev)
   uint8_t sideButtonFollowOrientation = 0;
   // Front button remap (logical -> hardware)
   // Used by MappedInputManager to translate logical buttons into physical front buttons.

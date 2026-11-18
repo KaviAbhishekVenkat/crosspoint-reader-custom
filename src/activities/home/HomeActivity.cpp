@@ -25,9 +25,12 @@
 #include "RecentBooksStore.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
+#include "util/BookProgress.h"
+#include "util/ReadingStats.h"
+#include "util/BookStatsStore.h"
 
 int HomeActivity::getMenuItemCount() const {
-  int count = 4;  // File Browser, Library, File transfer, Settings
+  int count = 5;  // File Browser, Library, File transfer, Settings, Reading Stats
   if (!recentBooks.empty()) {
     count += recentBooks.size();
   }
@@ -246,6 +249,8 @@ void HomeActivity::onEnter() {
   }
   loadRecentBooks(coverGridUi ? CoverGridHomeUi::MAX_BOOKS : metrics.homeRecentBooksCount);
   hasContinueReading = !recentBooks.empty();
+  READING_STATS.load();
+  continueBookProgress = hasContinueReading ? loadBookProgress(recentBooks.front().path) : -1;
   if (coverGridUi) {
     fillCoverGridFromLibrary();
     resolveGridCoverPaths();
@@ -338,6 +343,9 @@ void HomeActivity::loop() {
         break;
       case HomeMenuItem::SETTINGS_MENU:
         onSettingsOpen();
+        break;
+      case HomeMenuItem::READING_STATISTICS:
+        onReadingStatsOpen();
         break;
       default:
         break;
@@ -528,6 +536,13 @@ void HomeActivity::render(RenderLock&&) {
   }
   bool bufferRestored = coverRendered && coverBufferStored && restoreCoverBuffer();
 
+  // Format compact reading stats summary for the header band (zero dynamic heap allocation)
+  char statsBuf[32];
+  const auto& stats = READING_STATS.getData();
+  const uint32_t sessionMins = stats.totalSecondsSession / 60;
+  snprintf(statsBuf, sizeof(statsBuf), "Session: %u pgs - %um",
+           (unsigned)stats.totalPagesSession, (unsigned)sessionMins);
+
   // Band spans topPadding..homeTopPadding: the cover tile starts at the fixed
   // homeTopPadding, so the height must shrink by topPadding or the band (and a
   // centered title, e.g. RoundedRaff's book title) sinks into the tile.
@@ -535,6 +550,17 @@ void HomeActivity::render(RenderLock&&) {
   GUI.drawHeader(renderer, Rect{0, metrics.topPadding, pageWidth, metrics.homeTopPadding - metrics.topPadding},
                  metrics.homeContinueReadingInMenu && !recentBooks.empty() ? recentBooks[0].title.c_str() : nullptr,
                  nullptr, false);
+
+  // Center reading stats directly in the top header band between the corner clock and battery
+  if (!metrics.homeContinueReadingInMenu || recentBooks.empty()) {
+    const int statsWidth = renderer.getTextWidth(UI_10_FONT_ID, statsBuf);
+    const int statsHeight = renderer.getLineHeight(UI_10_FONT_ID);
+    const int headerY = metrics.topPadding;
+    const int headerH = metrics.homeTopPadding - metrics.topPadding;
+    const int statsX = (pageWidth - statsWidth) / 2;
+    const int statsY = headerY + (headerH - statsHeight) / 2;
+    renderer.drawText(UI_10_FONT_ID, statsX, statsY, statsBuf, true);
+  }
 
   // Record the tile rect so storeCoverBuffer (called from the theme) knows
   // which sub-region of the framebuffer to snapshot. ~16 KB in Portrait
@@ -548,10 +574,42 @@ void HomeActivity::render(RenderLock&&) {
                           recentBooks, selectorIndex, coverRendered, coverBufferStored, bufferRestored,
                           std::bind(&HomeActivity::storeCoverBuffer, this));
 
+  // Feature A: Home Screen Book Completion Percentage & Progress Bar
+  if (hasContinueReading && continueBookProgress >= 0) {
+    char progressBuf[16];
+    snprintf(progressBuf, sizeof(progressBuf), "%d%%", continueBookProgress);
+
+    const int tileX = content.x + metrics.contentSidePadding;
+    const int tileY = metrics.homeTopPadding;
+    const int tileWidth = content.width - 2 * metrics.contentSidePadding;
+    const int tileHeight = metrics.homeCoverTileHeight;
+
+    const int badgeWidth = renderer.getTextWidth(UI_10_FONT_ID, progressBuf);
+    const int badgeHeight = renderer.getLineHeight(UI_10_FONT_ID);
+    const int barHeight = 4;
+    const int bottomMargin = 8;
+    const int barY = tileY + tileHeight - badgeHeight - bottomMargin;
+
+    const int coverWidth = static_cast<int>(metrics.homeCoverHeight * 0.6f);
+    const int textX = tileX + 4 + coverWidth + metrics.verticalSpacing;
+    const int barX = (!recentBooks[0].coverBmpPath.empty() && textX + 60 < tileX + tileWidth) ? textX : (tileX + 10);
+    const int barWidth = (tileX + tileWidth) - barX - badgeWidth - 14;
+
+    if (barWidth > 30) {
+      const int lineY = barY + (badgeHeight - barHeight) / 2;
+      renderer.drawRect(barX, lineY, barWidth, barHeight);
+      const int fillWidth = (barWidth - 2) * continueBookProgress / 100;
+      if (fillWidth > 0) {
+        renderer.fillRect(barX + 1, lineY + 1, fillWidth, barHeight - 2);
+      }
+      renderer.drawText(UI_10_FONT_ID, barX + barWidth + 8, barY, progressBuf, true);
+    }
+  }
+
   // Build menu items dynamically
   std::vector<const char*> menuItems = {tr(STR_BROWSE_FILES), tr(STR_LIBRARY), tr(STR_FILE_TRANSFER),
-                                        tr(STR_SETTINGS_TITLE)};
-  std::vector<UIIcon> menuIcons = {Folder, Library, Transfer, Settings};
+                                        tr(STR_SETTINGS_TITLE), tr(STR_READING_STATS)};
+  std::vector<UIIcon> menuIcons = {Folder, Library, Transfer, Settings, Recent};
 
   if (slotItem() != HomeMenuItem::NONE) {
     menuItems.insert(menuItems.begin() + 2, hasPlugins ? tr(STR_PLUGINS) : tr(STR_OPDS_BROWSER));
@@ -601,3 +659,7 @@ void HomeActivity::onFileTransferOpen() { activityManager.goToFileTransfer(); }
 void HomeActivity::onOpdsBrowserOpen() { activityManager.goToBrowser(); }
 
 void HomeActivity::onPluginsOpen() { activityManager.goToPlugins(); }
+
+void HomeActivity::onReadingStatsOpen() {
+  activityManager.goToReadingStats();
+}

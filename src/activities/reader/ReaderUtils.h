@@ -63,7 +63,10 @@ struct FrontPageTurnButtons {
 };
 
 inline FrontPageTurnButtons getFrontPageTurnButtons(const MappedInputManager& input) {
-  const bool swapped = input.isNavDirectionSwapped();
+  bool swapped = input.isNavDirectionSwapped();
+  if (SETTINGS.swapFrontPageTurnButtons) {
+    swapped = !swapped;
+  }
   return {swapped ? MappedInputManager::Button::Right : MappedInputManager::Button::Left,
           swapped ? MappedInputManager::Button::Left : MappedInputManager::Button::Right};
 }

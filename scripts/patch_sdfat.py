@@ -67,7 +67,7 @@ def apply_patches(project_dir, dependency_dir):
 
     # Archive dependencies must not discover the enclosing application Git repo.
     process_env = {key: os.environ[key] for key in ("HOME", "PATH", "TMPDIR", "LANG") if key in os.environ}
-    process_env.update(GIT_CEILING_DIRECTORIES=str(dependency.parent),
+    process_env.update(GIT_CEILING_DIRECTORIES=dependency.parent.as_posix(),
                        GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_NOSYSTEM="1")
     pending = []
     for name, relative, upstream, patched in PATCHES:
@@ -76,21 +76,22 @@ def apply_patches(project_dir, dependency_dir):
         if current not in (upstream, patched):
             raise RuntimeError("Unrecognized SdFat source: " + relative)
         patch = project / "scripts" / "sdfat_patches" / name
+        patch_bytes = patch.read_bytes().replace(b"\r\n", b"\n")
         # Validate the entire set before changing any dependency files.
-        command = ["git", "apply", "--check"]
+        command = ["git", "apply", "--check", "-"]
         if current == patched:
-            command.append("--reverse")
-        result = subprocess.run(command + [str(patch)], cwd=dependency,
-                                env=process_env, capture_output=True, text=True)
+            command.insert(2, "--reverse")
+        result = subprocess.run(command, input=patch_bytes, cwd=dependency,
+                                env=process_env, capture_output=True)
         if result.returncode:
-            raise RuntimeError("SdFat patch does not apply: " + name + "\n" + result.stderr)
+            raise RuntimeError("SdFat patch does not apply: " + name + "\n" + result.stderr.decode('utf-8', 'replace'))
         if current == upstream:
-            pending.append((patch, target, patched))
-    for patch, target, expected in pending:
-        subprocess.run(["git", "apply", str(patch)], cwd=dependency, env=process_env, check=True)
+            pending.append((patch_bytes, patch.name, target, patched))
+    for patch_bytes, patch_name, target, expected in pending:
+        subprocess.run(["git", "apply", "-"], input=patch_bytes, cwd=dependency, env=process_env, check=True)
         if digest(target) != expected:
             raise RuntimeError("Unexpected patched SdFat source: " + target.name)
-        print("Applied SdFat patch: " + patch.name)
+        print("Applied SdFat patch: " + patch_name)
 
 
 def patch_selected_dependency(env):

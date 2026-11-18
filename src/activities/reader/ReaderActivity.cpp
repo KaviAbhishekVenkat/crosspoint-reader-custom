@@ -19,6 +19,9 @@
 #include "SdCardFontSystem.h"
 #include "XtcReaderActivity.h"
 #include "util/PluginEvents.h"
+#include "util/ReadingStats.h"
+#include "util/BookStatsStore.h"
+#include <esp_timer.h>
 
 ReaderActivity::ReaderActivity(const char* name, GfxRenderer& renderer, MappedInputManager& mappedInput,
                                std::string bookPath, const bool allowFastInitialRefresh)
@@ -52,10 +55,31 @@ void ReaderActivity::disableFastInitialRefresh() { pagesUntilFullRefresh = 0; }
 void ReaderActivity::notePageTurn(const bool forward, const bool succeeded) {
   RenderLock lock(*this);
   readerSession.noteTurn(forward, succeeded);
+  if (succeeded) {
+    READING_STATS.recordPageTurn();
+    BOOK_STATS.recordPageTurn(bookPath);
+  }
+  updateActiveReadingTime();
+}
+
+void ReaderActivity::updateActiveReadingTime() {
+  const int64_t nowUs = esp_timer_get_time();
+  if (lastActiveTimeUs > 0 && nowUs > lastActiveTimeUs) {
+    const uint32_t deltaSec = static_cast<uint32_t>((nowUs - lastActiveTimeUs) / 1000000ULL);
+    // Ignore unreasonable idle gaps (> 10 minutes) to avoid inflating reading stats when inactive
+    if (deltaSec > 0 && deltaSec <= 600) {
+      READING_STATS.addReadingTime(deltaSec);
+      BOOK_STATS.addReadingTime(bookPath, deltaSec);
+    }
+  }
+  lastActiveTimeUs = nowUs;
 }
 
 void ReaderActivity::onEnter() {
   Activity::onEnter();
+  READING_STATS.load();
+  BOOK_STATS.load();
+  lastActiveTimeUs = esp_timer_get_time();
 
   // Heap ledger for field crash reports: free vs largest block distinguishes a
   // leak (free falls) from fragmentation (free stable, largest collapses).
@@ -90,6 +114,9 @@ void ReaderActivity::rememberBookOnceRendered() {
   APP_STATE.openEpubPath = bookPath;
   APP_STATE.saveToFile();
   RECENT_BOOKS.addBook(bookPath, getBookTitle(), getBookAuthor(), getBookThumbBmpPath());
+  BOOK_STATS.recordSession(bookPath, getBookTitle(), getBookAuthor());
+  BOOK_STATS.updateProgress(bookPath, getProgressPercent());
+  BOOK_STATS.save();
   const pluginevents::Var openVars[] = {{"book", bookPath.c_str()}};
   pluginevents::emit(pluginevents::Event::ReaderOpen, openVars, 1);
 }
@@ -122,11 +149,22 @@ void ReaderActivity::onExit() {
   APP_STATE.readerActivityLoadCount = 0;
   APP_STATE.saveToFile();
 
+  updateActiveReadingTime();
+  READING_STATS.save();
+  BOOK_STATS.updateProgress(bookPath, getProgressPercent());
+  BOOK_STATS.save();
+
   endOfBookOptions.reset();
   endOfBookOptionsReady.store(false, std::memory_order_release);
 }
 
-void ReaderActivity::prepareForSleep() { flushReaderSession(); }
+void ReaderActivity::prepareForSleep() {
+  updateActiveReadingTime();
+  READING_STATS.save();
+  BOOK_STATS.updateProgress(bookPath, getProgressPercent());
+  BOOK_STATS.save();
+  flushReaderSession();
+}
 
 void ReaderActivity::flushReaderSession() {
   if (!readerSession.isEmitWorthy() || !pluginevents::anySubscriber(pluginevents::Event::ReaderSession)) {
@@ -219,6 +257,15 @@ bool ReaderActivity::handleEndOfBookPageTurn(const bool prevTriggered, const boo
 }
 
 void ReaderActivity::loop() {
+  // Periodically flush active duration and stats to SD card
+  const int64_t currentUs = esp_timer_get_time();
+  if (lastActiveTimeUs > 0 && currentUs - lastActiveTimeUs >= 30000000ULL) {
+    updateActiveReadingTime();
+    READING_STATS.save();
+    BOOK_STATS.updateProgress(bookPath, getProgressPercent());
+    BOOK_STATS.save();
+  }
+
   rememberBookOnceRendered();
   clearEndOfBookOptionsIfNeeded();
   if (handleEndOfBookMenu()) return;

@@ -174,9 +174,12 @@ void forEachBaseSetting(SettingVisitor visit, void* context) {
     emit(SettingInfo::Enum(StrId::STR_SHOW_READER_MENU, &CrossPointSettings::showReaderMenu,
                            {StrId::STR_STATE_OFF, StrId::STR_STATE_TAP, StrId::STR_STATE_SWIPE_UP}, "tapForReaderMenu",
                            StrId::STR_CAT_CONTROLS));
-  if (!BoardConfig::hasTouch())
+  if (!BoardConfig::hasTouch()) {
     emit(SettingInfo::Toggle(StrId::STR_FRONT_BTN_FOLLOW_ORIENTATION, &CrossPointSettings::frontButtonFollowOrientation,
                              "frontButtonFollowOrientation", StrId::STR_CAT_CONTROLS));
+    emit(SettingInfo::Toggle(StrId::STR_SWAP_PAGE_TURN_BUTTONS, &CrossPointSettings::swapFrontPageTurnButtons,
+                             "swapFrontPageTurnButtons", StrId::STR_CAT_CONTROLS));
+  }
   emit(SettingInfo::Toggle(StrId::STR_SIDE_BTN_FOLLOW_ORIENTATION, &CrossPointSettings::sideButtonFollowOrientation,
                            "sideButtonFollowOrientation", StrId::STR_CAT_CONTROLS));
   emit(SettingInfo::Enum(StrId::STR_LONG_PRESS_BEHAVIOR, &CrossPointSettings::longPressButtonBehavior,

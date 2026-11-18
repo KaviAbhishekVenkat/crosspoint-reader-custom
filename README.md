@@ -1,3 +1,50 @@
+# CrossPoint Reader (X4 Pro Custom Fork)
+
+> [!NOTE]
+> **Personal Fork Disclaimer**: This repository is an unofficial personal fork of [CrossPoint Reader](https://github.com/crosspoint-reader/crosspoint-reader) maintained by [@KaviAbhishekVenkat](https://github.com/KaviAbhishekVenkat) for personal use on the **Xteink X4 Pro (ESP32-S3)**. It is not affiliated with, maintained by, or officially endorsed by the upstream CrossPoint Reader team.
+>
+> - **Official Upstream Project & Releases**: [crosspoint-reader/crosspoint-reader](https://github.com/crosspoint-reader/crosspoint-reader)
+> - **Upstream Documentation**: [crosspointreader.com](https://crosspointreader.com)
+
+---
+
+## 🚀 Modifications & Custom Enhancements in this Fork
+
+This fork introduces several quality-of-life enhancements specifically tuned for the **Xteink X4 Pro** hardware while maintaining strict zero-heap-fragmentation guarantees:
+
+### 1. Home Screen Book Completion & Progress Bar
+- Displays a completion percentage badge (`XX%`) and a progress bar directly on the continue-reading card on the home screen.
+- Reads cached progress metadata instantly without loading the full EPUB OPF/ZIP parser.
+
+### 2. Centralized Reading Stats Store (`BookStatsStore`)
+- Persists per-book statistics to `/.crosspoint/book_stats.json` on the SD card.
+- Tracks:
+  - Total reading duration per book (in hours/minutes).
+  - Total pages turned.
+  - Number of reading sessions.
+  - Calculated reading pace (seconds per page).
+  - Date started, date last read, and date finished.
+- **Persistent:** Book stats remain permanently stored even if a book file is removed from the SD card.
+
+### 3. Global Session & Lifetime Tracker (`ReadingStats`)
+- Tracks active reading duration using monotonic timer deltas (`esp_timer_get_time()`) inside the reader, avoiding clock drift issues.
+- Persists session and all-time statistics to `.crosspoint/reading_stats.bin`.
+- Real-time session reading stat (`Session: X pgs - Ym`) displayed directly in the Home top status bar.
+
+### 4. Dedicated Full-Page Reading Stats Activity (`ReadingStatsActivity`)
+Accessible via the Home button menu (**Reading Stats**):
+- **Tab 1 (Overview):** Current session stats, reset session button, all-time totals, and most recent book summary.
+- **Tab 2 (Books):** Multi-row section card layout per book (zero `...` truncation) showing progress %, reading time, sessions, pace, started date, last read date, bookmark count, and a direct **Resume Reading** button.
+- **Tab 3 (Bookmarks):** Centralized bookmarks hub scanning all books across your reading history. Displays visible text snippets and position percentages; selecting any bookmark immediately launches that book in the reader.
+- **Tab 4 (Badges):** 13 tiered, gamified reading achievement badges unlocking automatically based on your reading milestones.
+
+### 5. Physical Button Ergonomics Preset (X4 Pro)
+- Configured for comfortable left-handed single-handed reading:
+  - Left / Right page turn swap (crisp Left button advances forward).
+  - Single short click of the Power button advances to the Next Page (long press remains dedicated to Sleep/Power).
+
+---
+
 # CrossPoint Reader
 
 [![Fund contributors](https://img.shields.io/badge/%F0%9F%91%91_Fund_contributors-royalty.dev-BB953A?style=for-the-badge&labelColor=1a1a1a)](https://app.royalty.dev/crosspoint-reader/crosspoint-reader)

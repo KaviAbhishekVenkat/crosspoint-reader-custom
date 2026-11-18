@@ -70,6 +70,8 @@ class ReaderActivity : public Activity {
   void disableFastInitialRefresh();
   void notePageTurn(bool forward, bool succeeded);
   void flushReaderSession();
+  void updateActiveReadingTime();
+  int64_t lastActiveTimeUs = 0;
 
  public:
   ~ReaderActivity() override = default;

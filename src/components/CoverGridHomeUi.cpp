@@ -10,6 +10,7 @@
 
 #include "MappedInputManager.h"
 #include "UITheme.h"
+#include "fontIds.h"
 #include "icons/blocks.h"
 #include "icons/book.h"
 #include "icons/folder.h"
@@ -17,6 +18,7 @@
 #include "icons/settings2.h"
 #include "icons/transfer.h"
 #include "util/BookProgress.h"
+#include "util/ReadingStats.h"
 
 namespace fui = freeink::ui;
 namespace {
@@ -160,6 +162,17 @@ void CoverGridHomeUi::drawHeaderBand() {
   // whole UI, and the grid is widened to meet them (see the hInset above).
   const ThemeMetrics& metrics = UITheme::getInstance().getMetrics();
   GUI.drawHeader(renderer, Rect{0, metrics.topPadding, renderer.getScreenWidth(), metrics.batteryBarHeight}, nullptr);
+
+  char statsBuf[32];
+  const auto& stats = READING_STATS.getData();
+  const uint32_t sessionMins = stats.totalSecondsSession / 60;
+  snprintf(statsBuf, sizeof(statsBuf), "Session: %u pgs - %um",
+           (unsigned)stats.totalPagesSession, (unsigned)sessionMins);
+  const int statsWidth = renderer.getTextWidth(UI_10_FONT_ID, statsBuf);
+  const int statsHeight = renderer.getLineHeight(UI_10_FONT_ID);
+  const int statsX = (renderer.getScreenWidth() - statsWidth) / 2;
+  const int statsY = metrics.topPadding + (metrics.batteryBarHeight - statsHeight) / 2;
+  renderer.drawText(UI_10_FONT_ID, statsX, statsY, statsBuf, true);
 }
 
 void CoverGridHomeUi::drawEmpty(UiScreen& screen) {
